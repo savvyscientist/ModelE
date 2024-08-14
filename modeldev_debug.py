@@ -5,46 +5,81 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import pandas as pd
 import sys
+import os
 import re
+# This script compares the specified modelE simulations
+# Global budgets (total) are calculated and saved in a txt file
+# and maps and difference maps are generated
+# It is meant to be a useful tool for evaluating simulations against a
+# baseline simulation
 
 #devtype = 'setuphour'
-#devtype = 'month'
-devtype = 'pyrEsource'
+#devtype = 'month'# setuphour bug simulation extended for a month
+#devtype = 'pyrEsource'
+devtype = 'lightning'
+#devtype = 'pyrEbug'
+version = 2
 if devtype == 'month':
     month = 'JAN1950'
     outputpath = '/discover/nobackup/kmezuman/plots/fire_repository/Development/setuphour_bug/'
     simlist = ['E6TomaF40pyrEold25', 'E6TomaF40pyrE25']
     index_pairs = [(0, 1)]
+    tracer_sources = ["biomass_src"]
+    include_tracers = True 
+    include_ccycle = False
+elif devtype == 'pyrEbug':
+    month = 'JAN1996'
+    outputpath = '/discover/nobackup/kmezuman/plots/fire_repository/Development/pyrE_bug/'
+    simlist = ['E6TomaF40intpyrEdebug', 'E6TomaF40intpyrEtest']
+    index_pairs = [(0, 1)]
+    tracer_sources = ["biomass_src"]
+    include_tracers = True 
+    include_ccycle = True 
 elif devtype == 'pyrEsource':
     outputpath = '/discover/nobackup/kmezuman/plots/fire_repository/Development/pyrEsource/'
     month = 'ANN1996'
     simlist = ['E6TomaF40intpyrEtest2', 'E6TomaF40intpyrEtest']
     index_pairs = [(0, 1)]
+    tracer_sources = ["AGRI_CMIP6_src", "PEAT_CMIP6_src", "biomass_src", "pyrE_src"]
+    include_ccycle = True
+    include_tracers = True 
 elif devtype == 'setuphour':
     month = 'PARTIAL'
     outputpath = '/discover/nobackup/kmezuman/plots/fire_repository/Development/setuphour_bug/Partial/'
     simlist = ['E6TomaF40pyrEold241', 'E6TomaF40pyrEold25', 'E6TomaF40pyrE241', 'E6TomaF40pyrE25']
     index_pairs = [(0, 1), (2, 3), (2, 0), (3, 1)]
+    tracer_sources = ["biomass_src"]
+    include_tracers = True 
+    include_ccycle = False
+elif devtype == 'lightning':
+    month = 'ANN2000'
+    outputpath = '/discover/nobackup/kmezuman/plots/fire_repository/Development/lightning/'
+    simlist = ['E3.1_705mlY2000jwKM', 'E3.1_788mlY2000jwKM', 'E3.1_698mlY2000jwKM']
+    index_pairs = [(0, 1), (1, 2), (2, 0)]
+    include_tracers = False
+    include_ccycle = False
+    version = 3
 else:
     sys.exit(f'incompatibel type: {devtype}')
+
+# Check if output folder exists and if not create it
+if not os.path.exists(outputpath):
+    os.makedirs(outputpath)
 
 simpath = '/discover/nobackup/kmezuman/'
 
 # Define the baseline variables
-#base_variables = ["FLASH", "CtoG", "FLAMM", "fireCount", "f_ignCG", "f_ignHUMAN", "BA_tree", "BA_shrub", "BA_grass"]
-base_variables = ["fireCount","FLAMM"]
+base_variables = ["FLASH", "CtoG", "FLAMM", "fireCount", "f_ignCG", "f_ignHUMAN", "BA_tree", "BA_shrub", "BA_grass"]
+#base_variables = ["fireCount","FLAMM"]
 s_to_yr = 60.*60.*24.*365.
 kg_to_Tg = 1.E-9
 
 # Define the tracer sources and tracers
-tracer_sources = ["AGRI_CMIP6_src", "PEAT_CMIP6_src", "biomass_src", "pyrE_src"]
 #tracers = ["CO", "BCB"]
 tracers = ["CO", "BCB", "OCB", "Alkenes", "Paraffin", "SO2", "NOx", "NH3"]
-include_tracers = True 
 
 # Define the carbon cycle tracer
 ccycle = "CO2n"
-include_ccycle = True
 
 intch4 = 'CH4'
 include_intch4 = False
@@ -96,6 +131,9 @@ for s, sim in enumerate(simlist):
         # Determine the file type based on variable name
         if var.endswith('_src'):
             ftype = 'taij'
+        #probably a bug here, need to fix the below so it's compatible with all diag needed from that
+        elif devtype == 'lightning':
+            ftype = 'xaij'
         else:
             ftype = 'aij'
 
@@ -119,7 +157,14 @@ for s, sim in enumerate(simlist):
 
             #Calculate global mean values
             hemis_var = dataset.variables[var + '_hemis']
-            hemis_var = hemis_var[hemis_glob_ind]
+            if version == 2:
+                hemis_var = hemis_var[hemis_glob_ind]
+            elif version == 3:
+                hemis_var = hemis_var[0,hemis_glob_ind]
+            else:
+                print(f"Script not compatible with model {version}")
+                sys.exit()
+
             # Handle missing values for hemis_var 
             #the line commented below has a bug
             #missing_value = hemis_var.missing_value #if 'missing_value' in hemis_var.ncattrs() else None 
@@ -134,7 +179,13 @@ for s, sim in enumerate(simlist):
             #the line commented below has a bug
             #missing_value_2d = two_d_var.missing_value if 'missing_value' in two_d_var.ncattrs() else None 
             missing_value_2d = missing_value
-            two_d_val = two_d_var[:] 
+            if version == 2:
+                two_d_val = two_d_var[:] 
+            elif version == 3:
+                two_d_val = two_d_var[0,:] 
+            else:
+                print(f"Script not compatible with model {version}")
+                sys.exit()
             if missing_value_2d is not None: 
                 two_d_val = np.where(two_d_val <= missing_value_2d, nan_mat, two_d_val) 
             two_d_val *= scaling_factor
@@ -251,7 +302,7 @@ print(f"Differences saved in {output_file_path}")
 #Plot 2D differences
 for var in var_list:
     #plt.subplots_adjust(hspace=0.001)
-    if devtype == 'month' or devtype == 'pyrEsource':
+    if devtype == 'month' or devtype == 'pyrEsource' or devtype == 'pyrEbug':
         plots = [
             (0, 0, (var, 0), simlist[0]), # A 
             (0, 1, (var, 1), simlist[1]), # B 
@@ -271,6 +322,16 @@ for var in var_list:
              ] 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(20, 15), subplot_kw={'projection': ccrs.PlateCarree()})
         fig.delaxes(axes[2,2])
+    elif devtype == 'lightning':
+        plots = [
+            (0, 0, (var, 0), simlist[0]), # A 
+            (0, 1, (var, 1), simlist[1]), # B 
+            (0, 2, (var, 2), simlist[2]), # C
+            (1, 0, (0, 1), f"{simlist[0]} - {simlist[1]}"), # A-B 
+            (1, 1, (0, 1), f"{simlist[1]} - {simlist[2]}"), # A-B 
+            (1, 2, (0, 1), f"{simlist[2]} - {simlist[0]}"), # A-B 
+            ]
+        fig, axes = plt.subplots(nrows=1, ncols=len(plots), figsize=(20, 5), subplot_kw={'projection': ccrs.PlateCarree()})
     else:
         sys.exit(f'incompatibel type: {devtype}')
     axes = axes.flatten()[:len(plots)]
