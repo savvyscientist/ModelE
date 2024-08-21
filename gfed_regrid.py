@@ -38,7 +38,7 @@ years = range(1997, 2020)
 for root, dirs, files in os.walk(filepath):
     sorted_files = sorted(files) 
     nc_files_list = [os.path.join(root, file) for file in sorted_files if int(file[fname_s:fname_e]) in years]
-
+    
 # Load the latitude and longitude for the target model resolution using xarray
 ds_latlon = xr.open_dataset(latpath)
 if 'lat' in ds_latlon.variables and 'lon' in ds_latlon.variables:
@@ -48,27 +48,61 @@ else:
     raise KeyError("Variables 'lat' and 'lon' not found in the dataset.")
 
 # Function to regrid data using xarray's interpolation method
-def regrid_data_xarray(data, new_lat, new_lon):
-    regridded = data.interp(lat=new_lat, lon=new_lon, method='linear')
-    return regridded
+def regrid_burned_area(burned_area_data, target_lat_points, target_lon_points):
+    """
+    Regrid a burned area array to a specified target resolution.
+   
+    Parameters:
+    - burned_area_data: xarray.DataArray
+        The high-resolution burned area data to be regridded.
+    - target_lat_points: int
+        The number of latitude points in the target resolution.
+    - target_lon_points: int
+        The number of longitude points in the target resolution.
+       
+    Returns:
+    - regridded_data: xarray.DataArray
+        The regridded burned area data.
+    """
+    # Calculate block sizes for averaging
+    lat_block_size = burned_area_data.shape[0] // target_lat_points
+    lon_block_size = burned_area_data.shape[1] // target_lon_points
+    print(lat_block_size, lon_block_size)
 
+    # Reshape and average over blocks
+    regridded_data_values = burned_area_data.values.reshape(
+            (target_lat_points, lat_block_size, target_lon_points, lon_block_size)
+    ).sum(axis=(1, 3))# Average over the blocks
+
+    # Create the target lat/lon coordinates
+    lat_target = np.linspace(burned_area_data.lat.min(), burned_area_data.lat.max(), target_lat_points)
+    lon_target = np.linspace(burned_area_data.lon.min(), burned_area_data.lon.max(), target_lon_points)
+    print(lon_target)
+    print(lon1)
+    print(lat_target)
+    print(lat1)
+
+    # Create a new DataArray for the regridded data
+    regridded_data = xr.DataArray(
+            regridded_data_values,
+            coords=[lat_target, lon_target],
+            dims=["lat", "lon"]
+            )
+   
+    return regridded_data
 # Earth surface area matrix for 0.25x0.25 degree cells (in m^2)
 earth_surface_area = np.full(old_shape, 510.1e12 / (old_nlon * old_nlat))  # Earth's surface area is ~510.1 million km^2
 
 # Process each file
 for filepath in nc_files_list:
-    # Open the GFED dataset
-    gfed_data = xr.open_dataset(filepath)
-    print(filepath)
-    #print(gfed_data.info())
-    
     if gfed == '5':
+        gfed_data = xr.open_dataset(filepath)
         # Regrid specified variables and calculate 'Nat'
-        total_regridded = regrid_data_xarray(gfed_data['Total'], lat1, lon1)
+        total_regridded = regrid_burned_area(gfed_data['Total'], new_nlat, new_nlon)
         if int(filepath[fname_e-4:fname_e]) > 2000:
-            peat_regridded = regrid_data_xarray(gfed_data['Peat'], lat1, lon1)
-            crop_regridded = regrid_data_xarray(gfed_data['Crop'], lat1, lon1)
-            defo_regridded = regrid_data_xarray(gfed_data['Defo'], lat1, lon1)
+            peat_regridded = regrid_burned_area(gfed_data['Peat'], new_nlat, new_nlon)
+            crop_regridded = regrid_burned_area(gfed_data['Crop'], new_nlat, new_nlon)
+            defo_regridded = regrid_burned_area(gfed_data['Defo'], new_nlat, new_nlon)
             # Calculate 'Nat' as Total - (Peat + Crop + Defo)
             nat_regridded = total_regridded - (peat_regridded + crop_regridded + defo_regridded)
         
@@ -86,6 +120,9 @@ for filepath in nc_files_list:
             })
         
     elif gfed == '4s':
+        gfed_data = xr.open_dataset(filepath)
+        print(filepath)
+        print(gfed_data.info())
         # Multiply 'small_fire_fraction' by the Earth surface area and regrid
         small_fire_fraction = gfed_data['burned_fraction']
         small_fire_area = small_fire_fraction * earth_surface_area
@@ -95,8 +132,11 @@ for filepath in nc_files_list:
         regridded_dataset = xr.Dataset({
             'small_fire_area': small_fire_area_regridded
         })
+        sys.exit()
     
+    # Generate unique output file name
+    output_filename = os.path.join(outputpath, f"regridded_{os.path.basename(filepath)}")
     # Save the regridded dataset to a new NetCDF file
-    regridded_dataset.to_netcdf(outputpath)
+    regridded_dataset.to_netcdf(output_filename)
 
-    print(f"Regridded data saved to {outputpath}")
+    print(f"Regridded data saved to {output_filename}")
