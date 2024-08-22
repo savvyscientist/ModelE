@@ -77,24 +77,30 @@ def regrid_burned_area(burned_area_data, target_lat, target_lon):
     lon_new_cell_size = 360./target_lon.size 
     # Loop over each cell in the target grid
 
-    for i in range(target_lat):
-        for j in range(target_lon):
+    for i in range(target_lat.size):
+        for j in range(target_lon.size):
             # Find the bounds of the new grid cell
-            lat_min = lat_new[i] - lat_new_cell_size / 2
-            lat_max = lat_new[i] + lat_new_cell_size / 2
-            lon_min = lon_new[j] - lon_new_cell_size / 2
-            lon_max = lon_new[j] + lon_new_cell_size / 2
-
+            lat_min = target_lat[i] - lat_new_cell_size / 2
+            lat_max = target_lat[i] + lat_new_cell_size / 2
+            lon_min = target_lon[j] - lon_new_cell_size / 2
+            lon_max = target_lon[j] + lon_new_cell_size / 2
             # Find which cells in the original grid contribute to this new cell
-            lat_indices = np.where((lat_old >= lat_min) & (lat_old < lat_max))[0]
-            lon_indices = np.where((lon_old >= lon_min) & (lon_old < lon_max))[0]
+            lat_indices = np.where((source_lat >= lat_min) & (source_lat < lat_max))[0]
+            lon_indices = np.where((source_lon >= lon_min) & (source_lon < lon_max))[0]
 
             # Accumulate the values from the original grid into the new grid cell
             for lat_index in lat_indices:
                 for lon_index in lon_indices:
-                    overlap_area = lat_old_cell_size * lon_old_cell_size  # Approximate overlap area
-                    regridded_data_values[i, j] += burned_area_data[lat_index, lon_index].item() * overlap_area
+                    cell_value = burned_area_data.isel(lat=lat_index, lon=lon_index).values
+                    if cell_value.size > 1:
+                        cell_value = np.sum(cell_value)
+                    else:
+                        cell_value = cell_value.item()
 
+                    overlap_area = lat_old_cell_size * lon_old_cell_size  # Approximate overlap area
+                    regridded_data_values[i, j] += cell_value * overlap_area
+    # Return the regridded data as an xarray DataArray
+    regridded_data = xr.DataArray(regridded_data_values, coords=[target_lat, target_lon], dims=['lat','lon'])
     return regridded_data
 # Earth surface area matrix for 0.25x0.25 degree cells (in m^2)
 #earth_surface_area = np.full(old_shape, 510.1e12 / (old_nlon * old_nlat))  # Earth's surface area is ~510.1 million km^2
@@ -106,9 +112,9 @@ for filepath in nc_files_list:
         # Regrid specified variables and calculate 'Nat'
         total_regridded = regrid_burned_area(gfed_data['Total'], target_lat, target_lon)
         if int(filepath[fname_e-4:fname_e]) > 2000:
-            peat_regridded = regrid_burned_area(gfed_data['Peat'], new_nlat, new_nlon)
-            crop_regridded = regrid_burned_area(gfed_data['Crop'], new_nlat, new_nlon)
-            defo_regridded = regrid_burned_area(gfed_data['Defo'], new_nlat, new_nlon)
+            peat_regridded = regrid_burned_area(gfed_data['Peat'], target_lat, target_lon)
+            crop_regridded = regrid_burned_area(gfed_data['Crop'], target_lat, target_lon)
+            defo_regridded = regrid_burned_area(gfed_data['Defo'], target_lat, target_lon)
             # Calculate 'Nat' as Total - (Peat + Crop + Defo)
             nat_regridded = total_regridded - (peat_regridded + crop_regridded + defo_regridded)
         
