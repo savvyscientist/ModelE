@@ -5,7 +5,7 @@ import numpy as np
 import os
 import rasterio
 from rasterio.warp import reproject, Resampling
-from rasterio.transform import from_origin
+from rasterio.transform import from_bounds
 
 # Define the GFED version to use
 gfed = '5'
@@ -98,8 +98,28 @@ def regrid_burned_area_rasterio(burned_area_data, target_lat, target_lon):
         The regridded burned area data.
     """
 
-    src_transform = burned_area_data.attrs['transform']
-    src_crs = burned_area_data.attrs['crs']
+# Select only the first time slice if the data has a time dimension
+    if 'time' in burned_area_data.dims:
+        burned_area_data = burned_area_data.isel(time=0)
+
+# Check if transform exists, otherwise create it
+    if 'transform' in burned_area_data.attrs:
+        src_transform = burned_area_data.attrs['transform']
+    else:
+        # Assuming the coordinates are 2D grids and the data is in WGS84 (EPSG:4326)
+        lon_min, lon_max = burned_area_data.lon.min().item(), burned_area_data.lon.max().item()
+        lat_min, lat_max = burned_area_data.lat.min().item(), burned_area_data.lat.max().item()
+        src_transform = from_bounds(lon_min, lat_min, lon_max, lat_max, burned_area_data.sizes['lon'], burned_area_data.sizes['lat'])
+        burned_area_data.attrs['transform'] = src_transform
+
+# Define CRS if not present
+    if 'crs' in burned_area_data.attrs:
+        src_crs = burned_area_data.attrs['crs']
+    else:
+        src_crs = 'EPSG:4326'  # Default to WGS84
+        burned_area_data.attrs['crs'] = src_crs
+
+    
     src_height, src_width = burned_area_data.shape
     src_bounds = rasterio.transform.array_bounds(src_height, src_width, src_transform)
     
