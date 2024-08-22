@@ -2,6 +2,8 @@ import sys
 import xarray as xr
 import numpy as np
 import os
+import rasterio
+from rasterio.warp import reproject, Resampling
 
 # Define the GFED version to use
 gfed = '5'
@@ -78,27 +80,34 @@ def regrid_burned_area(burned_area_data, target_lat, target_lon):
     # Loop over each cell in the target grid
 
     for i in range(target_lat.size):
+        lat_min = target_lat[i] - lat_new_cell_size / 2
+        lat_max = target_lat[i] + lat_new_cell_size / 2
+        lat_mask = (source_lat >= lat_min) & (source_lat < lat_max)
+
         for j in range(target_lon.size):
             # Find the bounds of the new grid cell
-            lat_min = target_lat[i] - lat_new_cell_size / 2
-            lat_max = target_lat[i] + lat_new_cell_size / 2
             lon_min = target_lon[j] - lon_new_cell_size / 2
             lon_max = target_lon[j] + lon_new_cell_size / 2
+            lon_mask = (source_lon >= lon_min) & (source_lon < lon_max)
             # Find which cells in the original grid contribute to this new cell
-            lat_indices = np.where((source_lat >= lat_min) & (source_lat < lat_max))[0]
-            lon_indices = np.where((source_lon >= lon_min) & (source_lon < lon_max))[0]
+            lat_indices = np.where(lat_mask)[0]
+            lon_indices = np.where(lon_mask)[0]
 
-            # Accumulate the values from the original grid into the new grid cell
-            for lat_index in lat_indices:
-                for lon_index in lon_indices:
-                    cell_value = burned_area_data.isel(lat=lat_index, lon=lon_index).values
-                    if cell_value.size > 1:
-                        cell_value = np.sum(cell_value)
-                    else:
-                        cell_value = cell_value.item()
+            cell_values = burned_area_data.isel(
+                    lat=lat_mask, 
+                    lon=lon_mask
+                    )
 
-                    overlap_area = lat_old_cell_size * lon_old_cell_size  # Approximate overlap area
-                    regridded_data_values[i, j] += cell_value * overlap_area
+            # Sum over the appropriate axes if it's an xarray.DataArray
+            if isinstance(cell_values, xr.DataArray):
+                cell_values = cell_values.sum(dim=['lat','lon'])
+            else:
+            # Fallback for numpy arrays or other types
+                cell_values = np.sum(cell_values)
+
+            overlap_area = lat_old_cell_size * lon_old_cell_size  # Approximate overlap area
+            regridded_data_values[i, j] = cell_values * overlap_area
+
     # Return the regridded data as an xarray DataArray
     regridded_data = xr.DataArray(regridded_data_values, coords=[target_lat, target_lon], dims=['lat','lon'])
     return regridded_data
