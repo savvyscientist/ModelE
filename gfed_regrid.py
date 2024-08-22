@@ -2,8 +2,6 @@ import sys
 import xarray as xr
 import numpy as np
 import os
-import rasterio
-from rasterio.warp import reproject, Resampling
 
 # Define the GFED version to use
 gfed = '5'
