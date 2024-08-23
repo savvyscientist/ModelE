@@ -21,14 +21,6 @@ else:
 # Path to the lat/lon data for the target model resolution (2x2.5 degree)
 latpath = '/discover/nobackup/kmezuman/nk_CCycle_E6obioF40/ANN2005.aijnk_CCycle_E6obioF40.nc'
 
-# Define the target resolution for regridding
-
-new_nlon = 144
-new_nlat = 90
-#old_nlat = 720
-#old_nlon = 1440
-#old_shape = (720, 1440)  # 0.25x0.25 degree resolution
-
 
 # Range of years to process
 years = range(1997, 2020)

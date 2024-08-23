@@ -127,7 +127,7 @@ for filepath in nc_files_list:
             })
         else:
             regridded_dataset = xr.Dataset({
-                'Total': total_regridded,
+                'Total': total_regridded
             })
         
     # Generate unique output file name
