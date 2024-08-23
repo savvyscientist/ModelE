@@ -23,7 +23,7 @@ latpath = '/discover/nobackup/kmezuman/nk_CCycle_E6obioF40/ANN2005.aijnk_CCycle_
 
 
 # Range of years to process
-years = range(1997, 2020)
+years = range(2001, 2002)
 
 # Initialize a list to store filenames and their corresponding paths
 for root, dirs, files in os.walk(filepath):
@@ -41,7 +41,14 @@ else:
 # Function to regrid data using xarray's interpolation method
 def regrid_burned_area(burned_area_data, target_lat, target_lon):
     """
-    Manually perform conservative regridding from a high-resolution grid to a lower-resolution grid.
+    Perform conservative regridding from a high-resolution grid to a lower-resolution grid using vectorized operations.
+
+    The method calculates overlaps between the source grid cells (high-resolution) and the target grid cells
+    (lower-resolution). It then sums the values from the source grid cells based on these overlaps and assigns
+    the total to the corresponding target grid cell to ensure conservation of the total sum.
+
+    Special handling is applied for the polar regions, where the latitude ranges from -90 to -87 and from 87 to 90
+    are treated as single cells with a size of 3 degrees.
     
     Parameters:
     - burned_area_data: xarray.DataArray
@@ -58,48 +65,61 @@ def regrid_burned_area(burned_area_data, target_lat, target_lon):
     # Read the original grid
     source_lat = burned_area_data.lat
     source_lon = burned_area_data.lon
-    
-    # Initialize the new regridded array
-    regridded_data_values = np.zeros((target_lat.size, target_lon.size))
+    source_values = burned_area_data.values
     
     # Calculate the grid cell size for both grids
     lat_old_cell_size = 180./source_lat.size
     lon_old_cell_size = 360./source_lon.size
     lat_new_cell_size = 180./target_lat.size
     lon_new_cell_size = 360./target_lon.size 
-    # Loop over each cell in the target grid
 
-    for i in range(target_lat.size):
-        lat_min = target_lat[i] - lat_new_cell_size / 2
-        lat_max = target_lat[i] + lat_new_cell_size / 2
-        lat_mask = (source_lat >= lat_min) & (source_lat < lat_max)
+    # Initialize the new regridded array
+    regridded_data_values = np.zeros((target_lat.size, target_lon.size))
 
-        for j in range(target_lon.size):
-            # Find the bounds of the new grid cell
-            lon_min = target_lon[j] - lon_new_cell_size / 2
-            lon_max = target_lon[j] + lon_new_cell_size / 2
-            lon_mask = (source_lon >= lon_min) & (source_lon < lon_max)
-            # Find which cells in the original grid contribute to this new cell
-            lat_indices = np.where(lat_mask)[0]
-            lon_indices = np.where(lon_mask)[0]
+    # Convert target_lat and target_lon to NumPy arrays if they aren't already
+    target_lat = np.asarray(target_lat)
+    target_lon = np.asarray(target_lon)
 
-            cell_values = burned_area_data.isel(
-                    lat=lat_mask, 
-                    lon=lon_mask
-                    )
+    # Vectorized calculation of the min and max bounds for the target grid cells
+    lat_min = target_lat - lat_new_cell_size / 2
+    lat_max = target_lat + lat_new_cell_size / 2
 
-            # Sum over the appropriate axes if it's an xarray.DataArray
-            if isinstance(cell_values, xr.DataArray):
-                cell_values = cell_values.sum(dim=['lat','lon'])
-            else:
-            # Fallback for numpy arrays or other types
-                cell_values = np.sum(cell_values)
+    # Handle special cases for polar latitudes
+    lat_min[target_lat <= -87] = -90.
+    lat_max[target_lat >= 87] = 90.
 
-            overlap_area = lat_old_cell_size * lon_old_cell_size  # Approximate overlap area
-            regridded_data_values[i, j] = cell_values * overlap_area
+    lon_min = target_lon - lon_new_cell_size / 2
+    lon_max = target_lon + lon_new_cell_size / 2
 
-    # Return the regridded data as an xarray DataArray
-    regridded_data = xr.DataArray(regridded_data_values, coords=[target_lat, target_lon], dims=['lat','lon'])
+    # Vectorized calculation of the min and max bounds for the source grid cells
+    src_lat_min = source_lat - lat_old_cell_size / 2
+    src_lat_max = source_lat + lat_old_cell_size / 2
+    src_lon_min = source_lon - lon_old_cell_size / 2
+    src_lon_max = source_lon + lon_old_cell_size / 2
+
+    # Pre-calculate latitude overlaps once per target latitude
+    lat_overlap = np.maximum(0, np.minimum(lat_max[:, np.newaxis], src_lat_max) - np.maximum(lat_min[:, np.newaxis], src_lat_min))
+
+    # Calculate the overlaps and sum values for each target cell
+    for j in range(target_lon.size):
+        # Calculate the overlap in longitude
+        lon_overlap = np.maximum(0, np.minimum(lon_max[j], src_lon_max) - np.maximum(lon_min[j], src_lon_min))
+
+        # Compute the total overlap area for each target cell
+        overlap_area = lat_overlap * lon_overlap
+
+        # Sum the contributions from the source grid cells to the target grid cell
+        regridded_data_values[:, j] = np.sum(source_values * overlap_area, axis=(1, 2))
+
+    # Convert the regridded array back to an xarray DataArray with the correct coordinates
+    regridded_data = xr.DataArray(regridded_data_values, coords=[target_lat, target_lon], dims=['lat', 'lon'])
+    # Scale the regridded data to conserve total sum
+    total_source_sum = np.sum(source_values)
+    total_target_sum = np.sum(regridded_data_values)
+
+    if total_target_sum != 0:
+        regridded_data *= total_source_sum / total_target_sum
+
     return regridded_data
 # Earth surface area matrix for 0.25x0.25 degree cells (in m^2)
 #earth_surface_area = np.full(old_shape, 510.1e12 / (old_nlon * old_nlat))  # Earth's surface area is ~510.1 million km^2
