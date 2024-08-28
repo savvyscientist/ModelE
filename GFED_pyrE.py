@@ -118,17 +118,17 @@ def define_subplot(ax, data, lons, lats, cmap, cborientation, fraction, pad, lab
 
 ################################################################
 
-def process_data():
-import matplotlib.pyplot as plt
 
 def process_data():
     """Main data processing function that integrates various components."""
     config = load_config()
     
+    # Initialize arrays for emissions from different datasets
     emis_G = np.zeros((90, 144), dtype=float)
     emis_S = np.zeros((90, 144), dtype=float)
     emis_T = np.zeros((90, 144), dtype=float)
 
+    # Process emissions from the main dataset and Spawn dataset
     for year in range(config['iyear'], config['fyear'] + 1):
         filename = f"ANN{year}.aijnk_CCycle_E6obioF40.nc"
         filepath = os.path.join(config['d'], filename)
@@ -138,7 +138,7 @@ def process_data():
                 lats = f.variables['lat'][:]
                 lons = f.variables['lon'][:]
                 
-                # For each functional group, calculate the emissions using the main dataset
+                # Calculate emissions using the main dataset
                 for vtype in config['func_group']:
                     if vtype == 'grass':
                         emis_G += calculate_emis(vtype, BA=None, f=f, missing_val=None, nan_mat=None, 
@@ -156,8 +156,8 @@ def process_data():
                                                  grang=config['grang'], lats=lats, lons=lons, 
                                                  zero_mat=np.zeros_like(lats), file_path=filepath)
                 
-                # Calculate emissions using the Spawn dataset and combine them with the main dataset emissions
-                spawn_filepath = config['d5']  # Path to the Spawn dataset
+                # Calculate emissions using the Spawn dataset (d5)
+                spawn_filepath = config['d5']
                 emis_G += calculate_spawnemis(vtype='grass', BA=None, zero_mat=np.zeros_like(lats), 
                                               d=f, f=f, srang=config['srang'], 
                                               trang=config['trang'], grang=config['grang'], 
@@ -176,27 +176,139 @@ def process_data():
         else:
             print(f"File {filepath} not found. Skipping.")
     
-    # Step 3: Visualize the Results
-    fig, ax = plt.subplots(1, 3, figsize=(15, 5), subplot_kw={'projection': ccrs.PlateCarree()})
+    # Processing emissions from the d2 dataset (e.g., additional processing or transformation steps)
+    d2_filepath = os.path.join(config['d2'], 'some_specific_file.nc')  # Example: Use actual filenames here
     
-    define_subplot(ax[0], emis_G, lons, lats, cmap=config['cmap'], 
+    if os.path.exists(d2_filepath):
+        with nc.Dataset(d2_filepath) as f_d2:
+            lats = f_d2.variables['lat'][:]
+            lons = f_d2.variables['lon'][:]
+            
+            # Example of processing specific to d2 dataset (e.g., filtering or special handling)
+            emis_G_d2 = np.zeros((len(lats), len(lons)), dtype=float)
+            emis_S_d2 = np.zeros((len(lats), len(lons)), dtype=float)
+            emis_T_d2 = np.zeros((len(lats), len(lons)), dtype=float)
+            
+            for vtype in config['func_group']:
+                emis_G_d2 += calculate_emis(vtype, BA=None, f=f_d2, missing_val=None, nan_mat=None, 
+                                            srang=config['srang'], trang=config['trang'], 
+                                            grang=config['grang'], lats=lats, lons=lons, 
+                                            zero_mat=np.zeros_like(lats), file_path=d2_filepath)
+
+    else:
+        print(f"File {d2_filepath} not found. Skipping.")
+    
+    # Additional processing for d3 dataset
+    d3_filepath = os.path.join(config['d3'], 'some_specific_file.nc')  # Example: Use actual filenames here
+    
+    if os.path.exists(d3_filepath):
+        with nc.Dataset(d3_filepath) as f_d3:
+            lats = f_d3.variables['lat'][:]
+            lons = f_d3.variables['lon'][:]
+            
+            emis_G_d3 = np.zeros((len(lats), len(lons)), dtype=float)
+            emis_S_d3 = np.zeros((len(lats), len(lons)), dtype=float)
+            emis_T_d3 = np.zeros((len(lats), len(lons)), dtype=float)
+            
+            for vtype in config['func_group']:
+                emis_G_d3 += calculate_emis(vtype, BA=None, f=f_d3, missing_val=None, nan_mat=None, 
+                                            srang=config['srang'], trang=config['trang'], 
+                                            grang=config['grang'], lats=lats, lons=lons, 
+                                            zero_mat=np.zeros_like(lats), file_path=d3_filepath)
+
+    else:
+        print(f"File {d3_filepath} not found. Skipping.")
+    
+    # Processing emissions using d4 dataset (additional biomass or vegetation data)
+    d4_filepath = os.path.join(config['d4'], 'some_other_specific_file.nc')  # Adjust as needed
+    
+    if os.path.exists(d4_filepath):
+        with nc.Dataset(d4_filepath) as f_d4:
+            lats = f_d4.variables['lat'][:]
+            lons = f_d4.variables['lon'][:]
+            
+            emis_G_d4 = np.zeros((len(lats), len(lons)), dtype=float)
+            emis_S_d4 = np.zeros((len(lats), len(lons)), dtype=float)
+            emis_T_d4 = np.zeros((len(lats), len(lons)), dtype=float)
+            
+            for vtype in config['func_group']:
+                emis_G_d4 += calculate_emis(vtype, BA=None, f=f_d4, missing_val=None, nan_mat=None, 
+                                            srang=config['srang'], trang=config['trang'], 
+                                            grang=config['grang'], lats=lats, lons=lons, 
+                                            zero_mat=np.zeros_like(lats), file_path=d4_filepath)
+
+    else:
+        print(f"File {d4_filepath} not found. Skipping.")
+
+    # Step 3: Visualize the Results
+    fig, ax = plt.subplots(4, 3, figsize=(18, 16), subplot_kw={'projection': ccrs.PlateCarree()})
+    
+    # Plot emissions from the main dataset and Spawn dataset
+    define_subplot(ax[0, 0], emis_G, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Grass Emissions', 
+                   labelpad=5, fontsize=10, title='Grass Emissions (Main + Spawn)', 
                    glob=None, clabel='Emissions', masx=emis_G.max())
     
-    define_subplot(ax[1], emis_S, lons, lats, cmap=config['cmap'], 
+    define_subplot(ax[0, 1], emis_S, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Shrub Emissions', 
+                   labelpad=5, fontsize=10, title='Shrub Emissions (Main + Spawn)', 
                    glob=None, clabel='Emissions', masx=emis_S.max())
     
-    define_subplot(ax[2], emis_T, lons, lats, cmap=config['cmap'], 
+    define_subplot(ax[0, 2], emis_T, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Tree Emissions', 
+                   labelpad=5, fontsize=10, title='Tree Emissions (Main + Spawn)', 
                    glob=None, clabel='Emissions', masx=emis_T.max())
 
+    # Plot emissions from the d2 dataset
+    define_subplot(ax[1, 0], emis_G_d2, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Grass Emissions (d2 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_G_d2.max())
+    
+    define_subplot(ax[1, 1], emis_S_d2, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Shrub Emissions (d2 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_S_d2.max())
+    
+    define_subplot(ax[1, 2], emis_T_d2, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Tree Emissions (d2 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_T_d2.max())
+
+    # Plot emissions from the d3 dataset (BBURN_ALT dataset)
+    define_subplot(ax[2, 0], emis_G_d3, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Grass Emissions (d3 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_G_d3.max())
+    
+    define_subplot(ax[2, 1], emis_S_d3, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Shrub Emissions (d3 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_S_d3.max())
+    
+    define_subplot(ax[2, 2], emis_T_d3, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Tree Emissions (d3 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_T_d3.max())
+    
+    # Plot emissions from the d4 dataset
+    define_subplot(ax[3, 0], emis_G_d4, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Grass Emissions (d4 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_G_d4.max())
+    
+    define_subplot(ax[3, 1], emis_S_d4, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Shrub Emissions (d4 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_S_d4.max())
+    
+    define_subplot(ax[3, 2], emis_T_d4, lons, lats, cmap=config['cmap'], 
+                   cborientation='horizontal', fraction=0.05, pad=0.05, 
+                   labelpad=5, fontsize=10, title='Tree Emissions (d4 Dataset)', 
+                   glob=None, clabel='Emissions', masx=emis_T_d4.max())
+
+    plt.tight_layout()
     plt.show()
-
-
 
 ################################################################
 
