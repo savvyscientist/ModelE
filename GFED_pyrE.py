@@ -15,8 +15,8 @@ from netCDF4 import Dataset
 def load_config():
     """Load configuration settings for file paths, year range, and other parameters."""
     config = {
-        'd': '/discover/nobackup/bkanzer/',
-        'd2': '/discover/nobackup/bkanzer/nk_CCycle_E6obioF40',
+        'd': '/discover/nobackup/kmezuman/',
+        'd2': '/discover/nobackup/kmezuman/nk_CCycle_E6obioF40',
         'd3': '/discover/nobackup/projects/giss/prod_input_files/emis/BBURN_ALT/20240517/BBURN_GFED_4s/monthly',
         'd31': '/discover/nobackup/projects/giss/prod_input_files/emis/BBURN_ALT/20240517/BBURN_GFED_4s/monthly/NAT',
         'd4': '/discover/nobackup/projects/giss_ana/users/nkiang/aDATA/Biomass/Spawn2020/Spawn_Ent',
