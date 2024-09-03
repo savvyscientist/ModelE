@@ -32,18 +32,13 @@ def load_config():
 
 ################################################################
 
-def calculate_emis(vtype, BA, f, missing_val, nan_mat, srang, trang, grang, lats, lons, zero_mat, file_path):
+def calculate_emis(vrang, BA, f, missing_val, nan_mat, lats, lons, zero_mat):
     """Calculate emissions based on vegetation type and other factors."""
-    d = Dataset(file_path, 'r') 
-    
-    looptype_mapping = {'grass': grang, 'shrub': srang, 'tree': trang}
     
     var = np.zeros((len(lats), len(lons)), dtype=float)
     vf_arr = np.zeros((len(lats), len(lons)), dtype=float)
     
-    looptype = looptype_mapping[vtype]
-    
-    for t in looptype:
+    for t in vrang:
         vf = f.variables[f"ra001{t}"][:]
         vf = np.where(vf < 0., zero_mat, vf)
         vf_arr += vf
@@ -64,17 +59,13 @@ def calculate_emis(vtype, BA, f, missing_val, nan_mat, srang, trang, grang, lats
 
 ################################################################
 
-def calculate_spawnemis(vtype, BA, zero_mat, d, f, srang, trang, grang, lats, lons, file_path):
+def calculate_spawnemis(vrang, BA, file_path, f, lats, lons, zero_mat):
     """Calculate spawn emissions based on vegetation type and other factors."""
-    d = Dataset(file_path, 'r')
-    
-    looptype_mapping = {'grass': grang, 'shrub': srang, 'tree': trang}
-    looptype = looptype_mapping[vtype]
-    
+    d = Dataset(file_path, 'r') 
     vf_arr = np.zeros((len(lats), len(lons)), dtype=float)
     mult_arr = np.zeros((len(lats), len(lons)), dtype=float)
 
-    for t in looptype:
+    for t in vrang:
         vf = f.variables[f"ra001{t}"][:]
         vf = np.where(vf < 0., zero_mat, vf)
         vf_arr += vf
@@ -142,53 +133,41 @@ def process_data():
             with nc.Dataset(filepath) as f:
                 lats = f.variables['lat'][:]
                 lons = f.variables['lon'][:]
+                #Read pyrE CO2n emissions
+                emis_pyrE = f.variables['CO2n_pyrE_src'][:]
+                emis_pyrE *= 1.0E-12 
                 
                 # Calculate emissions using Ent biomass and pyrE BA
                 # and calculate emissions using Spawn biomass and pyrE BA
-                for vtype in config['func_group']:
-                    if vtype == 'grass':
-                        BA_grass = f.variables['BA_grass']
+                BA_grass = f.variables['BA_grass']
 
-                        emis_G += calculate_emis(vtype, BA=BA_grass, f=f, missing_val=None, nan_mat=None, 
-                                                 srang=config['srang'], trang=config['trang'], 
-                                                 grang=config['grang'], lats=lats, lons=lons, 
-                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
+                emis_G = calculate_emis(vtype=config['grang'], BA=BA_grass, f=f, missing_val=None, nan_mat=None, 
+                                         lats=lats, lons=lons, zero_mat=np.zeros_like(lats))
 
-                        emis_sp_G += calculate_spawnemis(vtype='grass', BA=BA_grass, zero_mat=np.zeros_like(lats), 
-                                              d=f, f=f, srang=config['srang'], 
-                                              trang=config['trang'], grang=config['grang'], 
-                                              lats=lats, lons=lons, file_path=spawn_filepath)
-                    elif vtype == 'shrub':
-                        BA_shrub = f.variables['BA_shrub']
+                emis_sp_G = calculate_spawnemis(vrang=config['grang'], BA=BA_grass, file_path=spawn_filepath,
+                                                 f=f, lats=lats, lons=lons, zero_mat=np.zeros_like(lats))
 
-                        emis_S += calculate_emis(vtype, BA=BA_shrub, f=f, missing_val=None, nan_mat=None, 
-                                                 srang=config['srang'], trang=config['trang'], 
-                                                 grang=config['grang'], lats=lats, lons=lons, 
-                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
+                BA_shrub = f.variables['BA_shrub']
 
-                        emis_sp_S += calculate_spawnemis(vtype='shrub', BA=BA_shrub, zero_mat=np.zeros_like(lats), 
-                                              d=f, f=f, srang=config['srang'], 
-                                              trang=config['trang'], grang=config['grang'], 
-                                              lats=lats, lons=lons, file_path=spawn_filepath)
+                emis_S = calculate_emis(vrang=config['shrub]', BA=BA_shrub, f=f, missing_val=None, nan_mat=None, 
+                                         lats=lats, lons=lons, zero_mat=np.zeros_like(lats))
 
-                    elif vtype == 'tree':
-                        BA_tree = f.variables['BA_tree']
+                emis_sp_S = calculate_spawnemis(vrang=config['srang'], BA=BA_shrub, file_path=spawn_filepath,
+                                                 f=f, lats=lats, lons=lons, zero_mat=np.zeros_like(lats))
 
-                        emis_T += calculate_emis(vtype, BA=BA_tree, f=f, missing_val=None, nan_mat=None, 
-                                                 srang=config['srang'], trang=config['trang'], 
-                                                 grang=config['grang'], lats=lats, lons=lons, 
-                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
+                BA_tree = f.variables['BA_tree']
 
-                        emis_sp_T += calculate_spawnemis(vtype='tree', BA=BA_tree, zero_mat=np.zeros_like(lats), 
-                                              d=f, f=f, srang=config['srang'], 
-                                              trang=config['trang'], grang=config['grang'], 
-                                              lats=lats, lons=lons, file_path=spawn_filepath)
+                emis_T = calculate_emis(vrang=config['tree'], BA=BA_tree, f=f, missing_val=None, nan_mat=None, 
+                                         lats=lats, lons=lons, zero_mat=np.zeros_like(lats))
+
+                emis_sp_S = calculate_spawnemis(vrang=config['trang'], BA=BA_tree, file_path=spawn_filepath,
+                                                 f=f, lats=lats, lons=lons, zero_mat=np.zeros_like(lats))
                 
                 emis_tot = emis_G + emis_S + emis_T   # Units kgCm^(-2)yr^(-1)
                 tot_emis = (np.nansum(emis_tot))*60.*60.*24.*365.
                 tot_emis = format(tot_emis, '.3e')
 
-                emis_sp_tot = emis_G + emis_S + emis_T   # Units kgCm^(-2)yr^(-1)
+                emis_sp_tot = emis_sp_G + emis_sp_S + emis_sp_T   # Units kgCm^(-2)yr^(-1)
                 tot_sp_emis = (np.nansum(emis_sp_tot))*60.*60.*24.*365.
                 tot_sp_emis = format(tot_sp_emis, '.3e')
         else:
@@ -217,72 +196,32 @@ def process_data():
     #Once the GFED4s and GFED5 BA is regridded emissions can be calculated with both the Ent and Spawn biomass
     
     # Step 3: Visualize the Results
-    fig, ax = plt.subplots(4, 3, figsize=(18, 16), subplot_kw={'projection': ccrs.PlateCarree()})
+    fig, ax = plt.subplots(2, 2, figsize=(18, 12), subplot_kw={'projection': ccrs.PlateCarree()})
     
-    # Plot emissions from the main dataset and Spawn dataset
-    define_subplot(ax[0, 0], emis_G, lons, lats, cmap=config['cmap'], 
+    # Plot emissions from pyrE BA and Ent Biomass 
+    define_subplot(ax[0, 0], emis_tot, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Grass Emissions (Main + Spawn)', 
+                   labelpad=5, fontsize=10, title='Offline Emissions (pyrE BA and Ent Biomass)', 
                    glob=None, clabel='Emissions', masx=emis_G.max())
     
-    define_subplot(ax[0, 1], emis_S, lons, lats, cmap=config['cmap'], 
+    # Plot emissions from the main dataset and Spawn dataset
+    define_subplot(ax[0, 1], emis_sp_tot, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Shrub Emissions (Main + Spawn)', 
+                   labelpad=5, fontsize=10, title='Offline Emissions (pyrE BA and Spawn Biomass)', 
                    glob=None, clabel='Emissions', masx=emis_S.max())
     
-    define_subplot(ax[0, 2], emis_T, lons, lats, cmap=config['cmap'], 
+    # Plot emissions from pyrE 
+    define_subplot(ax[1, 0], emis_pyrE, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Tree Emissions (Main + Spawn)', 
+                   labelpad=5, fontsize=10, title='pyrE old emissions', 
                    glob=None, clabel='Emissions', masx=emis_T.max())
 
-    # Plot emissions from the simulation dataset
-    define_subplot(ax[1, 0], emis_G_d2, lons, lats, cmap=config['cmap'], 
+    # Plot emissions from GFED4s
+    define_subplot(ax[1, 1], ann_mean, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Grass Emissions (d2 Dataset)', 
+                   labelpad=5, fontsize=10, title='GFED4s emissions', 
                    glob=None, clabel='Emissions', masx=emis_G_d2.max())
     
-    define_subplot(ax[1, 1], emis_S_d2, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Shrub Emissions (d2 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_S_d2.max())
-    
-    define_subplot(ax[1, 2], emis_T_d2, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Tree Emissions (d2 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_T_d2.max())
-
-    # Plot emissions from the obs dataset (BBURN_ALT dataset)
-    define_subplot(ax[2, 0], emis_G_d3, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Grass Emissions (d3 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_G_d3.max())
-    
-    define_subplot(ax[2, 1], emis_S_d3, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Shrub Emissions (d3 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_S_d3.max())
-    
-    define_subplot(ax[2, 2], emis_T_d3, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Tree Emissions (d3 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_T_d3.max())
-    
-    # Plot emissions from the d4 dataset
-    define_subplot(ax[3, 0], emis_G_d4, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Grass Emissions (d4 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_G_d4.max())
-    
-    define_subplot(ax[3, 1], emis_S_d4, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Shrub Emissions (d4 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_S_d4.max())
-    
-    define_subplot(ax[3, 2], emis_T_d4, lons, lats, cmap=config['cmap'], 
-                   cborientation='horizontal', fraction=0.05, pad=0.05, 
-                   labelpad=5, fontsize=10, title='Tree Emissions (d4 Dataset)', 
-                   glob=None, clabel='Emissions', masx=emis_T_d4.max())
-
     plt.tight_layout()
     plt.show()
 
