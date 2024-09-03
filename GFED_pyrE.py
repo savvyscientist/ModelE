@@ -15,10 +15,9 @@ from netCDF4 import Dataset
 def load_config():
     """Load configuration settings for file paths, year range, and other parameters."""
     config = {
-        'd': '/discover/nobackup/kmezuman/',
-        'd2': '/discover/nobackup/kmezuman/nk_CCycle_E6obioF40',
-        'd3': '/discover/nobackup/projects/giss/prod_input_files/emis/BBURN_ALT/20240517/BBURN_GFED_4s/monthly/NAT',
-        'd4': '/discover/nobackup/nkiang/DATA/Vegcov/V2HX2_EntGVSD_v1.1.2_16G_Spawn2020Sa_biomass_agb_2010_ann_pure.nc',
+        'dir_sim': '/discover/nobackup/kmezuman/nk_CCycle_E6obioF40',
+        'dir_obs_emis': '/discover/nobackup/projects/giss/prod_input_files/emis/BBURN_ALT/20240517/BBURN_GFED_4s/monthly/NAT',
+        'dir_obs_bio': '/discover/nobackup/nkiang/DATA/Vegcov/V2HX2_EntGVSD_v1.1.2_16G_Spawn2020Sa_biomass_agb_2010_ann_pure.nc',
         'nlat' 90,
         'nlon' 144,
         'cmap': 'jet',
@@ -123,103 +122,99 @@ def process_data():
     """Main data processing function that integrates various components."""
     config = load_config()
     zero_mat = np.zeros((config['nlat'], config['nlon']), dtype=float)
+    spawn_filepath = config['dir_obs_bio']
     
 
     # Calculate emissions from 1. Ent Biomass and  2. Spawn biomass
     # using pyrE BA and assumption of 100% combustion completeness
     for year in range(config['iyear'], config['fyear'] + 1):
         filename = f"ANN{year}.aijnk_CCycle_E6obioF40.nc"
-        filepath = os.path.join(config['d'], filename)
+        filepath = os.path.join(config['dir_sim'], filename)
     
         if os.path.exists(filepath):
             # Initialize arrays for emissions from different datasets
             emis_G = np.zeros((config['nlat'], config['nlon']), dtype=float)
             emis_S = np.zeros((config['nlat'], config['nlon']), dtype=float)
             emis_T = np.zeros((config['nlat'], config['nlon']), dtype=float)
+            emis_sp_G = np.zeros((config['nlat'], config['nlon']), dtype=float)
+            emis_sp_S = np.zeros((config['nlat'], config['nlon']), dtype=float)
+            emis_sp_T = np.zeros((config['nlat'], config['nlon']), dtype=float)
             with nc.Dataset(filepath) as f:
                 lats = f.variables['lat'][:]
                 lons = f.variables['lon'][:]
                 
-                # Calculate emissions using Ent biomass
+                # Calculate emissions using Ent biomass and pyrE BA
+                # and calculate emissions using Spawn biomass and pyrE BA
                 for vtype in config['func_group']:
                     if vtype == 'grass':
-                        emis_G += calculate_emis(vtype, BA=None, f=f, missing_val=None, nan_mat=None, 
-                                                 srang=config['srang'], trang=config['trang'], 
-                                                 grang=config['grang'], lats=lats, lons=lons, 
-                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
-                    elif vtype == 'shrub':
-                        emis_S += calculate_emis(vtype, BA=None, f=f, missing_val=None, nan_mat=None, 
-                                                 srang=config['srang'], trang=config['trang'], 
-                                                 grang=config['grang'], lats=lats, lons=lons, 
-                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
-                    elif vtype == 'tree':
-                        emis_T += calculate_emis(vtype, BA=None, f=f, missing_val=None, nan_mat=None, 
-                                                 srang=config['srang'], trang=config['trang'], 
-                                                 grang=config['grang'], lats=lats, lons=lons, 
-                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
-                
-                # Calculate emissions using the Spawn biomass
-                #fix bug: Calculation with Spwan needs to be save seperately
-                #spawn_filepath = config['d4']
-                #emis_sp_G += calculate_spawnemis(vtype='grass', BA=None, zero_mat=np.zeros_like(lats), 
-                #                              d=f, f=f, srang=config['srang'], 
-                #                              trang=config['trang'], grang=config['grang'], 
-                #                              lats=lats, lons=lons, file_path=spawn_filepath)
-               # 
-               # emis_sp_S += calculate_spawnemis(vtype='shrub', BA=None, zero_mat=np.zeros_like(lats), 
-               #                               d=f, f=f, srang=config['srang'], 
-               #                               trang=config['trang'], grang=config['grang'], 
-               #                               lats=lats, lons=lons, file_path=spawn_filepath)
-               # 
-               # emis_sp_T += calculate_spawnemis(vtype='tree', BA=None, zero_mat=np.zeros_like(lats), 
-               #                               d=f, f=f, srang=config['srang'], 
-               #                               trang=config['trang'], grang=config['grang'], 
-               #                               lats=lats, lons=lons, file_path=spawn_filepath)
+                        BA_grass = f.variables['BA_grass']
 
+                        emis_G += calculate_emis(vtype, BA=BA_grass, f=f, missing_val=None, nan_mat=None, 
+                                                 srang=config['srang'], trang=config['trang'], 
+                                                 grang=config['grang'], lats=lats, lons=lons, 
+                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
+
+                        emis_sp_G += calculate_spawnemis(vtype='grass', BA=BA_grass, zero_mat=np.zeros_like(lats), 
+                                              d=f, f=f, srang=config['srang'], 
+                                              trang=config['trang'], grang=config['grang'], 
+                                              lats=lats, lons=lons, file_path=spawn_filepath)
+                    elif vtype == 'shrub':
+                        BA_shrub = f.variables['BA_shrub']
+
+                        emis_S += calculate_emis(vtype, BA=BA_shrub, f=f, missing_val=None, nan_mat=None, 
+                                                 srang=config['srang'], trang=config['trang'], 
+                                                 grang=config['grang'], lats=lats, lons=lons, 
+                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
+
+                        emis_sp_S += calculate_spawnemis(vtype='shrub', BA=BA_shrub, zero_mat=np.zeros_like(lats), 
+                                              d=f, f=f, srang=config['srang'], 
+                                              trang=config['trang'], grang=config['grang'], 
+                                              lats=lats, lons=lons, file_path=spawn_filepath)
+
+                    elif vtype == 'tree':
+                        BA_tree = f.variables['BA_tree']
+
+                        emis_T += calculate_emis(vtype, BA=BA_tree, f=f, missing_val=None, nan_mat=None, 
+                                                 srang=config['srang'], trang=config['trang'], 
+                                                 grang=config['grang'], lats=lats, lons=lons, 
+                                                 zero_mat=np.zeros_like(lats), file_path=filepath)
+
+                        emis_sp_T += calculate_spawnemis(vtype='tree', BA=BA_tree, zero_mat=np.zeros_like(lats), 
+                                              d=f, f=f, srang=config['srang'], 
+                                              trang=config['trang'], grang=config['grang'], 
+                                              lats=lats, lons=lons, file_path=spawn_filepath)
+                
+                emis_tot = emis_G + emis_S + emis_T   # Units kgCm^(-2)yr^(-1)
+                tot_emis = (np.nansum(emis_tot))*60.*60.*24.*365.
+                tot_emis = format(tot_emis, '.3e')
+
+                emis_sp_tot = emis_G + emis_S + emis_T   # Units kgCm^(-2)yr^(-1)
+                tot_sp_emis = (np.nansum(emis_sp_tot))*60.*60.*24.*365.
+                tot_sp_emis = format(tot_sp_emis, '.3e')
         else:
             print(f"File {filepath} not found. Skipping.")
     
-    # Processing emissions from the d2 dataset (e.g., additional processing or transformation steps)
-    #d2_filepath = os.path.join(config['d2'], 'some_specific_file.nc')  # Example: Use actual filenames here
-   # 
-   # if os.path.exists(d2_filepath):
-   #     with nc.Dataset(d2_filepath) as f_d2:
-   #         lats = f_d2.variables['lat'][:]
-   #         lons = f_d2.variables['lon'][:]
-   #         
-   #         # Example of processing specific to d2 dataset (e.g., filtering or special handling)
-   #         emis_G_d2 = np.zeros((len(lats), len(lons)), dtype=float)
-   #         emis_S_d2 = np.zeros((len(lats), len(lons)), dtype=float)
-   #         emis_T_d2 = np.zeros((len(lats), len(lons)), dtype=float)
-   #         
-   #         for vtype in config['func_group']:
-   #             emis_G_d2 += calculate_emis(vtype, BA=None, f=f_d2, missing_val=None, nan_mat=None, 
-   #                                         srang=config['srang'], trang=config['trang'], 
-   #                                         grang=config['grang'], lats=lats, lons=lons, 
-   #                                         zero_mat=np.zeros_like(lats), file_path=d2_filepath)
-
-   # else:
-    #    print(f"File {d2_filepath} not found. Skipping.")
+        # Calculate GFED4s annual mean emissions for comparison
+        obs_filepath = os.path.join(config['dir_obs_emis'], f"{year}.nc")  # Example: Use actual filenames here
     
-    # Calculate GFED4s annual mean emissions for comparison
-    d3_filepath = os.path.join(config['d3'], 'some_specific_file.nc')  # Example: Use actual filenames here
-    
-    if os.path.exists(d3_filepath):
-        ann_sum = np.zeros((config['nlat'], config['nlon']), dtype=float)
-        with nc.Dataset(d3_filepath) as f_d3:
-            for k in range(12):
-                GFED_data = f3.variables['CO2n'][k, :, :]  
-                GFED_CO2 = GFED_data.reshape(config['nlat'], config['nlon'])
-                GFED_CO2  *= axyp
-                GFED_CO2  *= (60.*60.*24.*365.) 
-                GFED_CO2 = np.where(GFED_CO2 <= 0., zero_mat, GFED_CO2)
-                ann_sum += GFED_CO2
-            totGFED = np.nansum(ann_sum)
-            totGFED = format(totGFED, '3e')
-            ann_mean = ann_sum / 12.
+        if os.path.exists(obs_filepath):
+            ann_sum = np.zeros((config['nlat'], config['nlon']), dtype=float)
+            with nc.Dataset(obs_filepath) as f_obs:
+                for k in range(12):
+                    GFED_data = f3.variables['CO2n'][k, :, :]  
+                    GFED_CO2 = GFED_data.reshape(config['nlat'], config['nlon'])
+                    GFED_CO2  *= axyp
+                    GFED_CO2  *= (60.*60.*24.*365.) 
+                    GFED_CO2 = np.where(GFED_CO2 <= 0., zero_mat, GFED_CO2)
+                    ann_sum += GFED_CO2
+                totGFED = np.nansum(ann_sum)
+                totGFED = format(totGFED, '3e')
+                ann_mean = ann_sum / 12.
 
-    else:
-        print(f"File {d3_filepath} not found. Skipping.")
+        else:
+            print(f"File {obs_filepath} not found. Skipping.")
+
+    #Once the GFED4s and GFED5 BA is regridded emissions can be calculated with both the Ent and Spawn biomass
     
     # Step 3: Visualize the Results
     fig, ax = plt.subplots(4, 3, figsize=(18, 16), subplot_kw={'projection': ccrs.PlateCarree()})
@@ -240,7 +235,7 @@ def process_data():
                    labelpad=5, fontsize=10, title='Tree Emissions (Main + Spawn)', 
                    glob=None, clabel='Emissions', masx=emis_T.max())
 
-    # Plot emissions from the d2 dataset
+    # Plot emissions from the simulation dataset
     define_subplot(ax[1, 0], emis_G_d2, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
                    labelpad=5, fontsize=10, title='Grass Emissions (d2 Dataset)', 
@@ -256,7 +251,7 @@ def process_data():
                    labelpad=5, fontsize=10, title='Tree Emissions (d2 Dataset)', 
                    glob=None, clabel='Emissions', masx=emis_T_d2.max())
 
-    # Plot emissions from the d3 dataset (BBURN_ALT dataset)
+    # Plot emissions from the obs dataset (BBURN_ALT dataset)
     define_subplot(ax[2, 0], emis_G_d3, lons, lats, cmap=config['cmap'], 
                    cborientation='horizontal', fraction=0.05, pad=0.05, 
                    labelpad=5, fontsize=10, title='Grass Emissions (d3 Dataset)', 
