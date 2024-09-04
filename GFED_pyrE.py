@@ -97,6 +97,7 @@ def calculate_spawnemis(vrang, BA, file_path, f, lats, lons, zero_mat):
 
 ################################################################
 
+#to do: fix function so that total is printed in the title
 def define_subplot(fig, ax, data, lons, lats, cmap, cborientation, fraction, pad, labelpad, fontsize, title, glob, clabel, masx, is_diff=False):
     """Define the properties of a subplot with optional difference normalization."""
     ax.coastlines(color='black')
@@ -221,7 +222,7 @@ def process_data():
         else:
             print(f"File {obs_filepath} not found. Skipping.")
 
-    #Once the GFED4s and GFED5 BA is regridded emissions can be calculated with both the Ent and Spawn biomass
+    # to do: once the GFED4s and GFED5 BA is regridded emissions can be calculated with both the Ent and Spawn biomass
     
     # Step 3: Visualize the Results
     fig, ax = plt.subplots(2, 2, figsize=(18, 10), subplot_kw={'projection': ccrs.PlateCarree()})
