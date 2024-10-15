@@ -25,8 +25,8 @@ def load_config():
         'cmap': 'jet',
         'iyear': 2010,
         'fyear': 2010,
-        'experiment': 'All'
-        # 'All' burns all aboveground vegetation 
+        'experiment': 'all',
+        # 'all' burns all aboveground vegetation 
         # 'lfine' burns only fine litter 
         # 'lfine&CWD' burns fine litter and coarse woody debris litter
         # 'lfine&CWD&fol' burns fine litter, coarse woody debris litter and foliage
@@ -55,11 +55,10 @@ def extract_scaling_factor(units):
 
 ################################################################
 
-def calculate_emis(vrang, BA, f, missing_val, nan_mat, lats, lons, zero_mat):
+def calculate_emis(vrang, BA, f, missing_val, nan_mat, lats, lons, zero_mat, experiment):
     """Calculate emissions based on vegetation type and other factors."""
     
-    abg_sum = np.zeros((len(lats), len(lons)), dtype=float)
-    abgC = np.zeros((len(lats), len(lons)), dtype=float)
+    fuelC = np.zeros((len(lats), len(lons)), dtype=float)
     vf_arr = np.zeros((len(lats), len(lons)), dtype=float)
     
     for t in vrang:
@@ -67,14 +66,23 @@ def calculate_emis(vrang, BA, f, missing_val, nan_mat, lats, lons, zero_mat):
         vf = np.where(vf < 0., zero_mat, vf)
         vf_arr += vf
 
-        totCM = f.variables[f"ra017{t}"][:] #kgC m-2  vf (total land carbon mass)
-        totCM = np.where(totCM < 0., zero_mat, totCM)
-        if experiment == 'ALL':
-            totCM = f.variables[f"ra017{t}"][:] #kgC m-2  vf (total land carbon mass)
-            totCM = np.where(totCM < 0., zero_mat, totCM)
-            soilC = f.variables[f"ra024{t}"][:] #kgC m-2  vf (soil carbon mass)
-            soilC = np.where(soilC < 0., zero_mat, soilC)
-            fuelC = (totCM - soilC)
+        if experiment == 'all':
+            #Originally calculated fuelC as totCM-soilC as specified below
+            #totCM = f.variables[f"ra017{t}"][:] #kgC m-2  vf (total land carbon mass)
+            #totCM = np.where(totCM < 0., zero_mat, totCM)
+            #soilC = f.variables[f"ra024{t}"][:] #kgC m-2  vf (soil carbon mass)
+            #soilC = np.where(soilC < 0., zero_mat, soilC)
+            #diff = (totCM - soilC)
+            #ra018+ra019+ra020+ra021
+            labileC = f.variables[f"ra018{t}"][:] #kgC m-2  vf
+            labileC = np.where(labileC < 0., zero_mat, labileC)
+            foliageC = f.variables[f"ra019{t}"][:] #kgC m-2  vf
+            foliageC = np.where(foliageC < 0., zero_mat, foliageC)
+            sapwoodC = f.variables[f"ra020{t}"][:] #kgC m-2  vf
+            sapwoodC = np.where(sapwoodC < 0., zero_mat, sapwoodC)
+            heartwoodC = f.variables[f"ra021{t}"][:] #kgC m-2  vf
+            heartwoodC = np.where(heartwoodC < 0., zero_mat, heartwoodC)
+            fuelC += (vf * (labileC + foliageC + sapwoodC + heartwoodC))
         elif experiment == 'lfine':
             lfineC_met = f.variables[f"ra032{t}"][:] #kgC m-2  vf 
             lfineC_met = np.where(lfineC_met < 0., zero_mat, lfineC_met)
@@ -82,7 +90,7 @@ def calculate_emis(vrang, BA, f, missing_val, nan_mat, lats, lons, zero_mat):
             lfineC_str = np.where(lfineC_str < 0., zero_mat, lfineC_str)
             lfineC_mic = f.variables[f"ra037{t}"][:] #kgC m-2  vf
             lfineC_mic = np.where(lfineC_mic < 0., zero_mat, lfineC_mic)
-            fuelC = lfineC_met + lfineC_str + lfineC_mic
+            fuelC += (vf * (lfineC_met + lfineC_str + lfineC_mic))
         elif experiment == 'lfine&CWD':
             lfineC_met = f.variables[f"ra032{t}"][:] #kgC m-2  vf 
             lfineC_met = np.where(lfineC_met < 0., zero_mat, lfineC_met)
@@ -92,7 +100,7 @@ def calculate_emis(vrang, BA, f, missing_val, nan_mat, lats, lons, zero_mat):
             lfineC_mic = np.where(lfineC_mic < 0., zero_mat, lfineC_mic)
             CWDC = f.variables[f"ra036{t}"][:] #kgC m-2  vf 
             CWDC = np.where(CWDC < 0., zero_mat, CWDC)
-            fuelC = lfineC_met + lfineC_str + lfineC_mic + CWDC
+            fuelC += (vf * (lfineC_met + lfineC_str + lfineC_mic + CWDC))
         elif experiment == 'lfine&CWD&fol':
             lfineC_met = f.variables[f"ra032{t}"][:] #kgC m-2  vf 
             lfineC_met = np.where(lfineC_met < 0., zero_mat, lfineC_met)
@@ -104,13 +112,12 @@ def calculate_emis(vrang, BA, f, missing_val, nan_mat, lats, lons, zero_mat):
             CWDC = np.where(CWDC < 0., zero_mat, CWDC)
             folC = f.variables[f"ra019{t}"][:] #kgC m-2  vf 
             folC = np.where(folC < 0., zero_mat, folC)
-            fuelC = lfineC_met + lfineC_str + lfineC_mic + CWDC + folC
+            fuelC += (vf * (lfineC_met + lfineC_str + lfineC_mic + CWDC + folC))
         else:
-            stop,f{'Code not compatible with experiment {experiment}'
+            raise ValueError(f'Code not compatible with experiment {experiment}')
         
-        abg_sum += (vf * (fuelC))
     
-    emis_type = np.divide(BA * abg_sum, vf_arr, where=vf_arr != 0, out=np.full_like(vf_arr, 0.))
+    emis_type = np.divide(BA * fuelC, vf_arr, where=vf_arr != 0, out=np.full_like(vf_arr, 0.))
     
     return emis_type
 
@@ -181,16 +188,15 @@ def process_data():
     # List of months to read from the monthly files
     months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
     cbar_max = 900.
-    #All aboveground
+    #all aboveground
     #litter fine (ra032 + ra033 + ra037): 
     #litter fine + litter CWD (ra036)
     #litter finer + litter CWD + foliage (ra019)
     #GFED4s based: Table 1 + soil moisture index (SMI)
     #GFED4s include fuel load from leaves, stems, fine leaf litter, CWD, Boreal organic soils, Tropical peat organic soils
     #GFED4s combustion completeness varies between a min and max values (per fuel type) and is scaled to the "soil moisture index" etc...
-    experiments = config['experiments']
+    exp = config['experiment']
 
-    for e,exp in enumarate(experiments):
     # Calculate emissions from 1. Ent Biomass and  2. Spawn biomass
     # using pyrE BA and assumption of 100% combustion completeness
     for year in range(config['iyear'], config['fyear'] + 1):
@@ -216,7 +222,7 @@ def process_data():
                 BA_grass = f.variables['BA_grass'] #m^2
 
                 emis_G = calculate_emis(vrang=config['grang'], BA=BA_grass, f=f, missing_val=None, nan_mat=None, 
-                                        lats=lats, lons=lons, zero_mat=zero_mat)
+                                        lats=lats, lons=lons, zero_mat=zero_mat, experiment=exp)
 
                 emis_sp_G = calculate_spawnemis(vrang=config['grang'], BA=BA_grass, file_path=spawn_filepath,
                                                 f=f, lats=lats, lons=lons, zero_mat=zero_mat)
@@ -224,7 +230,7 @@ def process_data():
                 BA_shrub = f.variables['BA_shrub'] #m^2
 
                 emis_S = calculate_emis(vrang=config['srang'], BA=BA_shrub, f=f, missing_val=None, nan_mat=None, 
-                                        lats=lats, lons=lons, zero_mat=zero_mat)
+                                        lats=lats, lons=lons, zero_mat=zero_mat, experiment=exp)
 
                 emis_sp_S = calculate_spawnemis(vrang=config['srang'], BA=BA_shrub, file_path=spawn_filepath,
                                                 f=f, lats=lats, lons=lons, zero_mat=zero_mat)
@@ -232,7 +238,7 @@ def process_data():
                 BA_tree = f.variables['BA_tree'] #m^2
 
                 emis_T = calculate_emis(vrang=config['trang'], BA=BA_tree, f=f, missing_val=None, nan_mat=None, 
-                                        lats=lats, lons=lons, zero_mat=zero_mat)
+                                        lats=lats, lons=lons, zero_mat=zero_mat, experiment=exp)
 
                 emis_sp_S = calculate_spawnemis(vrang=config['trang'], BA=BA_tree, file_path=spawn_filepath,
                                                 f=f, lats=lats, lons=lons, zero_mat=zero_mat)
