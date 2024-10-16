@@ -1,36 +1,41 @@
-
+import h5py
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 
 def read_gfed4s(file_paths):
     """
-    Reads multiple HDF5 files corresponding to different years, concatenates them along the time dimension,
-    and calculates the annual burned area and decade mean.
-
-    Parameters:
-    file_paths (list): List of paths to the HDF5 files.
-
-    Returns:
-    xarray.DataArray: Total burned area concatenated over time.
+    Reads multiple HDF5 files using h5py, calculates the annual burned area,
+    and returns the data as xarray.DataArray.
     """
-    
-    # Use xarray's open_mfdataset to open multiple files at once
-    ds_list = [xr.open_dataset(file_path, engine='h5netcdf', phony_dims='access') for file_path in file_paths]
-
-    # Initialize a list for storing burned fraction data for each year
     burned_fraction_list = []
-    
-    for ds in ds_list:
-        # Access the grid cell area and the burned fraction for each dataset
-        grid_cell_area = ds['ancill/grid_cell_area']
-        annual_burned_fraction = sum(ds[f'burned_area/{month:02d}/burned_fraction'] for month in range(1, 13))
-        total_burned_area = annual_burned_fraction * grid_cell_area
-        
-        burned_fraction_list.append(total_burned_area)
 
-    # Concatenate all years along a new 'year' dimension
-    total_burned_area_all_years = xr.concat(burned_fraction_list, dim='year')
+    for file_path in file_paths:
+        # Open the HDF5 file using h5py
+        with h5py.File(file_path, 'r') as h5file:
+            # Access grid_cell_area using the method suggested
+            grid_cell_area = h5file['ancill']['grid_cell_area'][:]
+            
+            # Load lat and lon for constructing the xarray dataset
+            lat = h5file['lat'][:]
+            lon = h5file['lon'][:]
+            
+            # Sum burned fraction over all months
+            annual_burned_fraction = np.zeros_like(grid_cell_area)
+            for month in range(1, 13):
+                month_burned_fraction = h5file[f'burned_area/{month:02d}/burned_fraction'][:]
+                annual_burned_fraction += month_burned_fraction
+
+            # Calculate total burned area
+            total_burned_area = annual_burned_fraction * grid_cell_area
+            burned_fraction_list.append(total_burned_area)
+
+    # Convert the list to xarray.DataArray for further processing
+    total_burned_area_all_years = xr.DataArray(
+        burned_fraction_list, 
+        dims=['year', 'lat', 'lon'], 
+        coords={'lat': lat, 'lon': lon}
+    )
 
     return total_burned_area_all_years
 
