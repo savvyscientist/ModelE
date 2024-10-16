@@ -34,7 +34,7 @@ def read_gfed4s(file_paths):
 
     return total_burned_area_all_years
 
-def read_ModelEBA(startyear, endyear, simname='nk_CCycle_E6obioF40', base_path='/path/to/data/'):
+def read_ModelEBA(startyear, endyear, simname, ModelE_path):
     """
     Reads ModelE BA data (BA_tree, BA_shrub, BA_grass) for the given year range, sums them to calculate 
     modelE_BA, and returns the annual sum for each year.
@@ -43,14 +43,14 @@ def read_ModelEBA(startyear, endyear, simname='nk_CCycle_E6obioF40', base_path='
     startyear (int): The starting year.
     endyear (int): The ending year.
     simname (str): The simulation name to match the file format (default 'nk_CCycle_E6obioF40').
-    base_path (str): The base directory containing the annual NetCDF files.
+    ModelE_path (str): The directory containing ModelE output.
 
     Returns:
     np.ndarray: A 2D array (year, modelE_BA), where modelE_BA is the sum of BA_tree, BA_shrub, and BA_grass.
     """
 
     # Generate a list of file paths for the given year range
-    file_paths = [f'{base_path}ANN{year}.aij{simname}.nc' for year in range(startyear, endyear + 1)]
+    file_paths = [f'{ModelE_path}ANN{year}.aij{simname}.nc' for year in range(startyear, endyear + 1)]
     
     # Use xarray's open_mfdataset to open all files and concatenate along the 'time' dimension (which represents year)
     ds = xr.open_mfdataset(file_paths, combine='by_coords')
@@ -60,7 +60,7 @@ def read_ModelEBA(startyear, endyear, simname='nk_CCycle_E6obioF40', base_path='
     
     return modelE_BA
 
-def intann_BA_xarray(startyear=2002, endyear=2012, base_path='/path/to/data/', simname='nk_CCycle_E6obioF40'):
+def intann_BA_xarray(startyear, endyear, GFED_path, ModelE_path, simname):
     """
     Calculates the decade mean burned area (BA) and the interannual variability of BA
     from 2002 to 2012 using read_gfed4s and read_ModelEBA.
@@ -68,7 +68,8 @@ def intann_BA_xarray(startyear=2002, endyear=2012, base_path='/path/to/data/', s
     Parameters:
     startyear (int): The start year of the period (default 2002).
     endyear (int): The end year of the period (default 2012).
-    base_path (str): The base directory containing the HDF5 and NetCDF files.
+    GFED_path (str): The directory containing the GFED4s files.
+    ModelE_path (str): The directory containing ModelE output.
     simname (str): The simulation name for ModelE data.
 
     Returns:
@@ -79,7 +80,7 @@ def intann_BA_xarray(startyear=2002, endyear=2012, base_path='/path/to/data/', s
     """
 
     # Call read_gfed4s to load GFED4s data
-    file_paths = [f'{base_path}GFED4.1s_{year}.hdf5' for year in range(startyear, endyear + 1)]
+    file_paths = [f'{GFED_path}GFED4.1s_{year}.hdf5' for year in range(startyear, endyear + 1)]
     total_burned_area_all_years = read_gfed4s(file_paths)
 
     # Calculate the mean burned area over the decade
@@ -91,7 +92,7 @@ def intann_BA_xarray(startyear=2002, endyear=2012, base_path='/path/to/data/', s
     ba_per_year = np.column_stack((years, total_ba_per_year))
 
     # Call read_ModelEBA to load and process ModelE data
-    modelE_BA_all_years = read_ModelEBA(startyear, endyear, simname=simname, base_path=base_path)
+    modelE_BA_all_years = read_ModelEBA(startyear, endyear, simname, ModelE_path)
 
     # Calculate the mean burned area over the decade (ModelE)
     decade_mean_modelEba = modelE_BA_all_years.mean(dim='time')
@@ -155,11 +156,12 @@ def main():
     # Example usage with test parameters
     startyear = 2002
     endyear = 2012
-    base_path = '/path/to/data/'  # Replace with the actual path to your data files
+    GFED_path = '/discover/nobackup/projects/giss_ana/users/kmezuman/gfed4s/'  
+    ModelE_path = '/discover/nobackup/kmezuman/nk_CCycle_E6obioF40/'
     simname = 'nk_CCycle_E6obioF40'
 
     # Call intann_BA_xarray to calculate decadal mean BA and interannual variability
-    decade_mean_ba, ba_per_year, modelE_BA_per_year = intann_BA_xarray(startyear, endyear, base_path, simname)
+    decade_mean_ba, ba_per_year, modelE_BA_per_year = intann_BA_xarray(startyear, endyear, GFED_path, ModelE_path, simname)
 
     # Plot the decadal mean burned area
     map_plot(decade_mean_ba, decade_mean_modelEba)
